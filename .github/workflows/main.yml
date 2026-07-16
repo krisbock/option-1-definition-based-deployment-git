@@ -1,0 +1,69 @@
+# GitHub Actions equivalent of deploy-to-fabric.yml (Azure DevOps pipeline).
+#
+# Prerequisites (configure per environment under Settings > Environments):
+#   Environment secrets (equivalent to the "fabric_cicd_group_sensitive" variable
+#   group linked to Azure Key Vault):
+#     - AZTENANTID   : Entra tenant ID
+#     - AZCLIENTID   : Service principal (SP) client ID
+#     - AZSPNSECRET  : Service principal secret
+#
+#   Environment or repository variables (equivalent to the
+#   "fabric_cicd_group_non_sensitive" variable group):
+#     - TESTWORKSPACENAME : Fabric workspace name for the test environment
+#     - PRODWORKSPACENAME : Fabric workspace name for the prod environment
+#     - GITDIRECTORY      : Repository directory holding the Fabric items (e.g. fabric)
+#
+# The target environment is derived from the branch name (test or prod), matching
+# the Azure DevOps variable: replace(Build.SourceBranch, 'refs/heads/', '').
+
+name: Deploy to Fabric
+
+on:
+  push:
+    branches: [test, prod]
+    paths:
+      - "fabric/**"
+  workflow_dispatch:
+    inputs:
+      items_in_scope:
+        description: "Enter Fabric items to be deployed"
+        type: string
+        default: '["Notebook","DataPipeline","Lakehouse","SemanticModel","Report","VariableLibrary"]'
+
+jobs:
+  deploy-to-fabric:
+    name: Deploy to Fabric Workspace
+    runs-on: ubuntu-latest
+    # Maps to the Azure DevOps "environment: $(target_env)". The branch name
+    # (test or prod) selects the matching GitHub environment for approvals/secrets.
+    environment: ${{ github.ref_name }}
+    env:
+      # Non-sensitive variable group values exposed to the Python script via os.environ.
+      TESTWORKSPACENAME: ${{ vars.TESTWORKSPACENAME }}
+      PRODWORKSPACENAME: ${{ vars.PRODWORKSPACENAME }}
+      GITDIRECTORY: ${{ vars.GITDIRECTORY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python Environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Fabric CICD Library
+        run: |
+          python -m pip install --upgrade pip
+          pip install fabric-cicd
+
+      - name: Run deployment using fabric-cicd
+        env:
+          TARGET_ENV: ${{ github.ref_name }}
+          ITEMS_IN_SCOPE: ${{ github.event.inputs.items_in_scope || '["Notebook","DataPipeline","Lakehouse","SemanticModel","Report","VariableLibrary"]' }}
+        run: |
+          python .deploy/deploy-to-fabric.py \
+            --aztenantid "${{ secrets.AZTENANTID }}" \
+            --azclientid "${{ secrets.AZCLIENTID }}" \
+            --azspsecret "${{ secrets.AZSPNSECRET }}" \
+            --items_in_scope "$ITEMS_IN_SCOPE" \
+            --target_env "$TARGET_ENV"
