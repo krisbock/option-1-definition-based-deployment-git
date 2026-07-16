@@ -1,0 +1,11 @@
+{
+  "executableFile": "main.py",
+  "defaultLakehouseArtifactId": null,
+  "mainClass": null,
+  "additionalLakehouseIds": [],
+  "retryPolicy": null,
+  "commandLineArguments": "--table-name dummy_delta_table --mode overwrite",
+  "additionalLibraryUris": null,
+  "language": "Python",
+  "environmentArtifactId": null
+}
